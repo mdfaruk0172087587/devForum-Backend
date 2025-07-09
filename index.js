@@ -35,9 +35,72 @@ async function run() {
         const database = client.db('DevForumDB');
         // collection
         const postCollection = database.collection('devForum');
+        const userCollection = database.collection('users');
+
+        // user collection
+        // get api (user email)
+        app.get('/users/:email', async (req, res) => {
+            try {
+                const email = req.params.email;
+
+                const user = await userCollection.findOne({ email });
+
+                if (!user) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'User not found',
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    user,
+                });
+            } catch (error) {
+                console.error('Error fetching user:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal server error',
+                    error: error.message,
+                });
+            }
+        });
+        // post api
+        app.post('/users', async (req, res) => {
+            const email = req.body.email;
+            const userExists = await userCollection.findOne({ email });
+            if (userExists) {
+                return res.status(200).send({ message: 'user already exist', inserted: false });
+            }
+            const user = req.body;
+            const result = await userCollection.insertOne(user);
+            res.send(result)
+        });
+
 
         // post collection
-          //  Count API: Get post count by user email
+        // get api for email
+        app.get('/devForum/:email', async (req, res) => {
+            try {
+                const email = req.params.email;
+
+                const posts = await postCollection.find({ authorEmail: email }).sort({createdAt: -1}).limit(3).toArray();
+
+                res.send({
+                    success: true,
+                    count: posts.length,
+                    posts,
+                });
+            } catch (error) {
+                console.error('Error fetching posts:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal server error',
+                    error: error.message,
+                });
+            }
+        });
+        //  Count API: Get post count by user email
         app.get('/devForum/count', async (req, res) => {
             try {
                 const email = req.query.email;
@@ -52,12 +115,11 @@ async function run() {
                 res.status(500).send({ error: 'Internal Server Error' });
             }
         });
-
         // post API
         app.post('/devForum', async (req, res) => {
             try {
                 const newPost = req.body;
- 
+
                 // add default values if not provided
                 newPost.upVote = 0;
                 newPost.downVote = 0;
@@ -78,7 +140,7 @@ async function run() {
                 });
             }
         });
-       
+
 
 
 
