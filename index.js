@@ -1,5 +1,5 @@
 const express = require('express');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
 require('dotenv').config()
 const cookieParser = require('cookie-parser');
@@ -79,12 +79,69 @@ async function run() {
 
 
         // post collection
-        // get api for email
+        // get all post api for email 
+        app.get('/devForum/myPosts/:email', async (req, res) => {
+            try {
+                const email = req.params.email;
+
+                const posts = await postCollection.find({ authorEmail: email }).toArray();
+
+                res.send({
+                    success: true,
+                    count: posts.length,
+                    posts,
+                });
+            } catch (error) {
+                console.error('Error fetching posts:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal server error',
+                    error: error.message,
+                });
+            }
+        });
+        // get all post api for id
+        app.get('/devForum/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                // Invalid ObjectId handle
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Invalid post ID',
+                    });
+                }
+
+                const query = { _id: new ObjectId(id) };
+                const result = await postCollection.findOne(query);
+
+                if (!result) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'Post not found',
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    post: result,
+                });
+            } catch (error) {
+                console.error('Error fetching post by ID:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal server error',
+                    error: error.message,
+                });
+            }
+        });
+        // get api for email (limit)
         app.get('/devForum/:email', async (req, res) => {
             try {
                 const email = req.params.email;
 
-                const posts = await postCollection.find({ authorEmail: email }).sort({createdAt: -1}).limit(3).toArray();
+                const posts = await postCollection.find({ authorEmail: email }).sort({ createdAt: -1 }).limit(3).toArray();
 
                 res.send({
                     success: true,
@@ -136,6 +193,43 @@ async function run() {
                 res.status(500).send({
                     success: false,
                     message: 'Failed to add post',
+                    error: error.message,
+                });
+            }
+        });
+        // delete all post api for id
+        app.delete('/devForum/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Invalid post ID',
+                    });
+                }
+
+                const query = { _id: new ObjectId(id) };
+                const result = await postCollection.deleteOne(query);
+
+                if (result.deletedCount === 0) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'No post found to delete',
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    message: 'Post deleted successfully',
+                    deletedId: id,
+                });
+            } catch (error) {
+                console.error('Error deleting post:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal server error',
                     error: error.message,
                 });
             }
