@@ -79,6 +79,81 @@ async function run() {
 
 
         // post collection
+        // get all post
+        app.get('/devForum', async (req, res) => {
+            try {
+                // Query parameters
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 5;
+                const skip = (page - 1) * limit;
+
+                // Total posts count (for frontend pagination)
+                const totalPosts = await postCollection.countDocuments();
+
+                // Paginated posts
+                const result = await postCollection
+                    .find()
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(limit)
+                    .toArray();
+
+                res.send({
+                    success: true,
+                    currentPage: page,
+                    totalPosts,
+                    totalPages: Math.ceil(totalPosts / limit),
+                    count: result.length,
+                    posts: result
+                });
+            } catch (error) {
+                console.error('Error fetching paginated posts:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to load posts',
+                    error: error.message
+                });
+            }
+        });
+        // Get posts sorted by popularity
+        app.get('/devForum/popular', async (req, res) => {
+            try {
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 5;
+                const skip = (page - 1) * limit;
+
+                const totalPosts = await postCollection.countDocuments();
+
+                const result = await postCollection.aggregate([
+                    {
+                        $addFields: {
+                            voteDifference: { $subtract: ["$upVote", "$downVote"] }
+                        }
+                    },
+                    {
+                        $sort: { voteDifference: -1, createdAt: -1 }
+                    },
+                    { $skip: skip },
+                    { $limit: limit }
+                ]).toArray();
+
+                res.send({
+                    success: true,
+                    currentPage: page,
+                    totalPosts,
+                    totalPages: Math.ceil(totalPosts / limit),
+                    count: result.length,
+                    posts: result
+                });
+            } catch (error) {
+                console.error('Error sorting posts by popularity:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to sort posts',
+                    error: error.message
+                });
+            }
+        });
         // get all post api for email 
         app.get('/devForum/myPosts/:email', async (req, res) => {
             try {
@@ -202,7 +277,7 @@ async function run() {
             try {
                 const id = req.params.id;
 
-                
+
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).send({
                         success: false,
