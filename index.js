@@ -272,6 +272,86 @@ async function run() {
                 });
             }
         });
+        // update upVote
+        app.patch('/devForum/upvote/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                // validate id
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Invalid post ID',
+                    });
+                }
+
+                const filter = { _id: new ObjectId(id) };
+                const updateDoc = {
+                    $inc: { upVote: 1 },
+                };
+
+                const result = await postCollection.updateOne(filter, updateDoc);
+
+                if (result.modifiedCount === 0) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'Post not found or already updated',
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    message: 'Upvote added successfully',
+                    updatedId: id,
+                });
+            } catch (error) {
+                console.error('Error adding upvote:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to upvote',
+                    error: error.message,
+                });
+            }
+        });
+        // update downvote
+        app.patch('/devForum/downvote/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                // Validate MongoDB ObjectId
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Invalid post ID',
+                    });
+                }
+
+                const result = await postCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $inc: { downVote: 1 } }
+                );
+
+                if (result.modifiedCount === 0) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'Post not found or already downvoted',
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    message: 'Downvote added successfully',
+                    updatedId: id,
+                });
+            } catch (error) {
+                console.error('Error adding downvote:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to downvote',
+                    error: error.message,
+                });
+            }
+        });
         // delete all post api for id
         app.delete('/devForum/:id', async (req, res) => {
             try {
@@ -323,18 +403,6 @@ async function run() {
     }
 }
 run().catch(console.dir);
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
