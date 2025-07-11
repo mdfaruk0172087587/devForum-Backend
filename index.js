@@ -36,6 +36,7 @@ async function run() {
         // collection
         const postCollection = database.collection('devForum');
         const userCollection = database.collection('users');
+        const commentCollection = database.collection('comments');
 
         // user collection
         // get api (user email)
@@ -389,6 +390,70 @@ async function run() {
                 });
             }
         });
+
+
+        // comment collection
+        // get for post id
+        app.get('/comments/:postId', async (req, res) => {
+            try {
+                const postId = req.params.postId;
+
+                // যদি postId MongoDB ObjectId হিসেবে স্টোর হয়ে থাকে
+                const query = { postId: postId };
+
+                const comments = await commentCollection
+                    .find(query)
+                    .sort({ createdAt: -1 }) // নতুন কমেন্ট আগে দেখাতে চাইলে
+                    .toArray();
+
+                res.send({
+                    success: true,
+                    count: comments.length,
+                    comments,
+                });
+            } catch (error) {
+                console.error('Error fetching comments:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to load comments',
+                    error: error.message,
+                });
+            }
+        });
+        // post
+        app.post('/comments', async (req, res) => {
+            try {
+                const newComment = req.body;
+
+                // Optional validation
+                if (!newComment.postId || !newComment.commenterEmail || !newComment.commentText) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Missing required fields (postId, author, text)',
+                    });
+                }
+
+
+                newComment.createdAt = new Date().toISOString();
+
+                const result = await commentCollection.insertOne(newComment);
+
+                res.status(201).send({
+                    success: true,
+                    message: 'Comment added successfully',
+                    insertedId: result.insertedId,
+                });
+            } catch (error) {
+                console.error('Error adding comment:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to add comment',
+                    error: error.message,
+                });
+            }
+        });
+
+
 
 
 
