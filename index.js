@@ -37,6 +37,7 @@ async function run() {
         const postCollection = database.collection('devForum');
         const userCollection = database.collection('users');
         const commentCollection = database.collection('comments');
+        const commentReplayCollection = database.collection('commentsReplay');
 
         // user collection
         // get api (user email)
@@ -155,7 +156,7 @@ async function run() {
                 });
             }
         });
-        // get all post api for email 
+        // get all post api for email( my post)
         app.get('/devForum/myPosts/:email', async (req, res) => {
             try {
                 const email = req.params.email;
@@ -174,6 +175,43 @@ async function run() {
                     message: 'Internal server error',
                     error: error.message,
                 });
+            }
+        });
+
+        // get api for email (limit 3) (my profile)
+        app.get('/devForum/myProfile/:email', async (req, res) => {
+            try {
+                const email = req.params.email;
+
+                const posts = await postCollection.find({ authorEmail: email }).sort({ createdAt: -1 }).limit(3).toArray();
+
+                res.send({
+                    success: true,
+                    count: posts.length,
+                    posts,
+                });
+            } catch (error) {
+                console.error('Error fetching posts:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal server error',
+                    error: error.message,
+                });
+            }
+        });
+        //  Count API: Get post count by user email (add post)
+        app.get('/devForum/count', async (req, res) => {
+            try {
+                const email = req.query.email;
+                if (!email) {
+                    return res.status(400).send({ message: 'Email is required' });
+                }
+
+                const count = await postCollection.countDocuments({ authorEmail: email });
+                res.send({ count });
+            } catch (error) {
+                console.error('Error fetching post count:', error);
+                res.status(500).send({ error: 'Internal Server Error' });
             }
         });
         // get all post api for id
@@ -210,42 +248,6 @@ async function run() {
                     message: 'Internal server error',
                     error: error.message,
                 });
-            }
-        });
-        // get api for email (limit)
-        app.get('/devForum/:email', async (req, res) => {
-            try {
-                const email = req.params.email;
-
-                const posts = await postCollection.find({ authorEmail: email }).sort({ createdAt: -1 }).limit(3).toArray();
-
-                res.send({
-                    success: true,
-                    count: posts.length,
-                    posts,
-                });
-            } catch (error) {
-                console.error('Error fetching posts:', error);
-                res.status(500).send({
-                    success: false,
-                    message: 'Internal server error',
-                    error: error.message,
-                });
-            }
-        });
-        //  Count API: Get post count by user email
-        app.get('/devForum/count', async (req, res) => {
-            try {
-                const email = req.query.email;
-                if (!email) {
-                    return res.status(400).send({ message: 'Email is required' });
-                }
-
-                const count = await postCollection.countDocuments({ authorEmail: email });
-                res.send({ count });
-            } catch (error) {
-                console.error('Error fetching post count:', error);
-                res.status(500).send({ error: 'Internal Server Error' });
             }
         });
         // post API
@@ -452,6 +454,97 @@ async function run() {
                 });
             }
         });
+        // update get for id(my post comment Feedback)
+        app.put('/comments/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                // Validate ID
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Invalid comment ID',
+                    });
+                }
+
+                const query = { _id: new ObjectId(id) };
+                const updateDoc = {
+                    $set: {
+                        status: true,
+                    }
+                };
+
+                const result = await commentCollection.updateOne(query, updateDoc);
+
+                if (result.modifiedCount === 0) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'Comment not found or already updated',
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    message: 'Comment updated successfully',
+                    updatedId: id,
+                });
+            } catch (error) {
+                console.error('Error updating comment:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to update comment',
+                    error: error.message,
+                });
+            }
+        });
+
+        // comments replay collection
+        // post
+        app.post('/commentsReplay', async (req, res) => {
+            try {
+                const newReplay = req.body;
+
+                // Validation
+                if (!newReplay.commentId || !newReplay.reportedEmail || !newReplay.feedback) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Missing required fields (commentId, reportedEmail, feedback)',
+                    });
+                }
+
+                // Check if already reported by same user
+                const alreadyReported = await commentReplayCollection.findOne({
+                    commentId: newReplay.commentId,
+                    reportedEmail: newReplay.reportedEmail,
+                });
+
+                if (alreadyReported) {
+                    return res.status(409).send({
+                        success: false,
+                        message: 'You have already reported this comment.',
+                    });
+                }
+
+                // Insert into DB
+                const result = await commentReplayCollection.insertOne(newReplay);
+
+                res.status(201).send({
+                    success: true,
+                    message: 'Reported successfully.',
+                    insertedId: result.insertedId,
+                });
+
+            } catch (error) {
+                console.error('Error inserting report:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to add report',
+                    error: error.message,
+                });
+            }
+        });
+
+
 
 
 
