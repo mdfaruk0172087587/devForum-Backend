@@ -6,6 +6,8 @@ const cookieParser = require('cookie-parser');
 const app = express();
 const port = process.env.PROT || 3000
 
+const stripe = require('stripe')(process.env.PAYMENT_KEY); // Use your Stripe secret key
+
 
 // middleware
 app.use(cors());
@@ -38,6 +40,7 @@ async function run() {
         const userCollection = database.collection('users');
         const commentCollection = database.collection('comments');
         const commentReplayCollection = database.collection('commentsReplay');
+        const paymentCollection = database.collection('payments');
 
         // user collection
         // get api (user email)
@@ -208,7 +211,11 @@ async function run() {
                 }
 
                 const count = await postCollection.countDocuments({ authorEmail: email });
-                res.send({ count });
+                const user = await userCollection.findOne({email});
+                const isMember = user?.role === 'member';
+                const canPost = isMember || count <= 5;
+
+                res.send({ count , role: user?.role});
             } catch (error) {
                 console.error('Error fetching post count:', error);
                 res.status(500).send({ error: 'Internal Server Error' });
@@ -546,6 +553,59 @@ async function run() {
 
 
 
+        // payment collection
+        // payments post 
+        app.post('/payments', async (req, res) => {
+            try {
+                const { email, amount, paymentMethod, transactionId } = req.body;
+
+
+                // update users status
+                const updateResult = await userCollection.updateOne(
+                    { email:email },
+                    {
+                        $set: {
+                           role: 'member'
+                        }
+                    }
+                );
+               
+                // 2. insert payment record
+                const paymentDoc = {
+                    email,
+                    amount,
+                    paymentMethod,
+                    transactionId,
+                    paid_at_string: new Date().toISOString(),
+                    paid_at: new Date(),
+                };
+                const paymentResult = await paymentCollection.insertOne(paymentDoc);
+                res.status(201).send({
+                    message: 'payment recorded and parcel marked as paid',
+                    insertedId: paymentResult.insertedId
+                })
+            }
+            catch (error) {
+                console.log('payment processing failed :', error);
+                res.status(500).send({ message: 'failed to record payment' })
+            }
+        })
+
+        // payment api 
+        app.post('/create-payment-intent', async (req, res) => {
+            const amountInCents = req.body.amountInCents;
+            try {
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount: amountInCents, // Amount in cents
+                    currency: 'usd',
+                    payment_method_types: ['card'],
+                });
+
+                res.json({ clientSecret: paymentIntent.client_secret });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
+            }
+        });
 
 
 
