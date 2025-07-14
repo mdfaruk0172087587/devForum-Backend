@@ -41,8 +41,85 @@ async function run() {
         const commentCollection = database.collection('comments');
         const commentReplayCollection = database.collection('commentsReplay');
         const paymentCollection = database.collection('payments');
+        const tagsCollection = database.collection('tags');
 
         // user collection
+        // get api (user email for role (admin dash))
+        app.get('/users/role', async (req, res) => {
+            try {
+                const email = req.query.email;
+
+                if (!email) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Email is required',
+                    });
+                }
+
+                // userCollection থেকে role খোঁজা
+                const user = await userCollection.findOne(
+                    { email },
+                    {
+                        projection: { role: 1, _id: 0 }
+                    }
+                );
+
+                if (!user) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'User not found',
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    email,
+                    role: user.role,
+                });
+
+            } catch (error) {
+                console.error('Error fetching user role:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal Server Error',
+                    error: error.message,
+                });
+            }
+        });
+        // get api (user name (admin 2))
+        app.get('/users/search', async (req, res) => {
+            try {
+                const name = req.query.name;
+
+                if (!name) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Name is required',
+                    });
+                }
+
+                // partial and case-insensitive match
+                const query = {
+                    name: { $regex: name, $options: 'i' } // i = case-insensitive
+                };
+
+                const users = await userCollection.find(query).toArray();
+
+                res.send({
+                    success: true,
+                    count: users.length,
+                    users
+                });
+
+            } catch (error) {
+                console.error('Error searching users:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal Server Error',
+                    error: error.message,
+                });
+            }
+        });
         // get api (user email)
         app.get('/users/:email', async (req, res) => {
             try {
@@ -81,6 +158,131 @@ async function run() {
             const result = await userCollection.insertOne(user);
             res.send(result)
         });
+        // update admin
+        app.put('/users/admin/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                if (!id) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'User ID is required',
+                    });
+                }
+
+                const query = { _id: new ObjectId(id) };
+
+                //  Step 1: user kho ja
+                const user = await userCollection.findOne(query);
+
+                if (!user) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'User not found',
+                    });
+                }
+
+                if (user.role === 'admin') {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'User is already an admin',
+                    });
+                }
+
+                // 🛠️ Step 2: age r role save ko re admin ko ra
+                const updateDoc = {
+                    $set: {
+                        role: 'admin',
+                        previousRole: user.role || 'user'
+                    }
+                };
+
+                const result = await userCollection.updateOne(query, updateDoc);
+
+                res.send({
+                    success: true,
+                    message: `User promoted to admin (previous role was ${user.role})`,
+                    modifiedCount: result.modifiedCount,
+                });
+
+            } catch (error) {
+                console.error('Error updating user to admin:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal Server Error',
+                    error: error.message,
+                });
+            }
+        });
+        // update remove admin
+        app.put('/users/removeAdmin/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                if (!id) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'User ID is required',
+                    });
+                }
+
+                const query = { _id: new ObjectId(id) };
+
+                // age r user an a
+                const user = await userCollection.findOne(query);
+
+                if (!user) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'User not found',
+                    });
+                }
+
+                if (user.role !== 'admin') {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'User is not an admin',
+                    });
+                }
+
+                const previousRole = user.previousRole || 'user';
+
+                const updateDoc = {
+                    $set: {
+                        role: previousRole
+                    },
+                    $unset: {
+                        previousRole: ""
+                    }
+                };
+
+                const result = await userCollection.updateOne(query, updateDoc);
+
+                if (result.modifiedCount === 0) {
+                    return res.status(500).send({
+                        success: false,
+                        message: 'Failed to remove admin role',
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    message: `User demoted from admin to ${previousRole}`,
+                    modifiedCount: result.modifiedCount,
+                });
+
+            } catch (error) {
+                console.error('Error removing admin role:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal Server Error',
+                    error: error.message,
+                });
+            }
+        });
+
+
+
 
 
         // post collection
@@ -211,11 +413,11 @@ async function run() {
                 }
 
                 const count = await postCollection.countDocuments({ authorEmail: email });
-                const user = await userCollection.findOne({email});
+                const user = await userCollection.findOne({ email });
                 const isMember = user?.role === 'member';
                 const canPost = isMember || count <= 5;
 
-                res.send({ count , role: user?.role});
+                res.send({ count, role: user?.role });
             } catch (error) {
                 console.error('Error fetching post count:', error);
                 res.status(500).send({ error: 'Internal Server Error' });
@@ -562,14 +764,14 @@ async function run() {
 
                 // update users status
                 const updateResult = await userCollection.updateOne(
-                    { email:email },
+                    { email: email },
                     {
                         $set: {
-                           role: 'member'
+                            role: 'member'
                         }
                     }
                 );
-               
+
                 // 2. insert payment record
                 const paymentDoc = {
                     email,
