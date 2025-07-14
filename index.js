@@ -41,6 +41,7 @@ async function run() {
         const commentCollection = database.collection('comments');
         const commentReplayCollection = database.collection('commentsReplay');
         const paymentCollection = database.collection('payments');
+        const announcementCollection = database.collection('announcements');
         const tagsCollection = database.collection('tags');
 
         // user collection
@@ -752,6 +753,41 @@ async function run() {
                 });
             }
         });
+
+        // announcementCollection
+        // post api
+        app.post('/announcements', async (req, res) => {
+            try {
+                const newAnnouncement = req.body;
+
+                //  Validation check
+                if (!newAnnouncement?.title || !newAnnouncement?.description) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Title and message are required',
+                    });
+                }
+
+                //  Optional: createdAt
+                newAnnouncement.createdAt = new Date();
+
+                const result = await announcementCollection.insertOne(newAnnouncement);
+
+                res.status(201).send({
+                    success: true,
+                    message: 'Announcement posted successfully',
+                    insertedId: result.insertedId,
+                });
+            } catch (error) {
+                console.error('Error posting announcement:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal Server Error',
+                    error: error.message,
+                });
+            }
+        });
+
 
 
 
