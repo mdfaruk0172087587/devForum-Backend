@@ -109,40 +109,25 @@ async function run() {
                 });
             }
         });
-        // get api (user name (admin 2))
+        // get api (user name (manage users))
         app.get('/users/search', async (req, res) => {
-            try {
-                const name = req.query.name;
+            const name = req.query.name || '';
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const skip = (page - 1) * limit;
 
-                if (!name) {
-                    return res.status(400).send({
-                        success: false,
-                        message: 'Name is required',
-                    });
-                }
+            const query = { name: { $regex: name, $options: 'i' } };
+            const users = await userCollection.find(query).skip(skip).limit(limit).toArray();
+            const totalUsers = await userCollection.countDocuments(query);
 
-                // partial and case-insensitive match
-                const query = {
-                    name: { $regex: name, $options: 'i' } // i = case-insensitive
-                };
-
-                const users = await userCollection.find(query).toArray();
-
-                res.send({
-                    success: true,
-                    count: users.length,
-                    users
-                });
-
-            } catch (error) {
-                console.error('Error searching users:', error);
-                res.status(500).send({
-                    success: false,
-                    message: 'Internal Server Error',
-                    error: error.message,
-                });
-            }
+            res.send({
+                success: true,
+                users,
+                totalPages: Math.ceil(totalUsers / limit),
+                currentPage: page
+            });
         });
+
         // get api (user email)
         app.get('/users/:email', async (req, res) => {
             try {
@@ -387,25 +372,28 @@ async function run() {
         });
         // get all post api for email( my post)
         app.get('/devForum/myPosts/:email', async (req, res) => {
-            try {
-                const email = req.params.email;
+            const email = req.params.email;
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const skip = (page - 1) * limit;
 
-                const posts = await postCollection.find({ authorEmail: email }).toArray();
+            const totalPosts = await postCollection.countDocuments({ authorEmail: email });
 
-                res.send({
-                    success: true,
-                    count: posts.length,
-                    posts,
-                });
-            } catch (error) {
-                console.error('Error fetching posts:', error);
-                res.status(500).send({
-                    success: false,
-                    message: 'Internal server error',
-                    error: error.message,
-                });
-            }
+            const posts = await postCollection
+                .find({ authorEmail: email })
+                .skip(skip)
+                .limit(limit)
+                .toArray();
+
+            res.send({
+                success: true,
+                posts,
+                totalPosts,
+                totalPages: Math.ceil(totalPosts / limit),
+                currentPage: page
+            });
         });
+
 
         // get api for email (limit 3) (my profile)
         app.get('/devForum/myProfile/:email', async (req, res) => {
@@ -655,17 +643,27 @@ async function run() {
             try {
                 const postId = req.params.postId;
 
-                // যদি postId MongoDB ObjectId হিসেবে স্টোর হয়ে থাকে
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 10;
+                const skip = (page - 1) * limit;
+
                 const query = { postId: postId };
 
                 const comments = await commentCollection
                     .find(query)
-                    .sort({ createdAt: -1 }) // নতুন কমেন্ট আগে দেখাতে চাইলে
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(limit)
                     .toArray();
+
+                const totalComments = await commentCollection.countDocuments(query);
 
                 res.send({
                     success: true,
+                    currentPage: page,
+                    totalPages: Math.ceil(totalComments / limit),
                     count: comments.length,
+                    totalComments,
                     comments,
                 });
             } catch (error) {
@@ -677,6 +675,7 @@ async function run() {
                 });
             }
         });
+
         // post
         app.post('/comments', async (req, res) => {
             try {
@@ -794,25 +793,35 @@ async function run() {
         // get all replay
         app.get('/commentsReplay', async (req, res) => {
             try {
-                const result = await commentReplayCollection
-                    .find()
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 10;
+                const skip = (page - 1) * limit;
+                 const query = {};
+                const total = await commentReplayCollection.countDocuments(query);
+
+                const replays = await commentReplayCollection
+                    .find(query)
+                    .skip(skip)
+                    .limit(limit)
+                    .sort({ createdAt: -1 })
                     .toArray();
 
                 res.send({
                     success: true,
-                    count: result.length,
-                    replays: result,
+                    replays,
+                    currentPage: page,
+                    totalPages: Math.ceil(total / limit)
                 });
-
             } catch (error) {
-                console.error('Error fetching comment replays:', error);
+                console.error('Error fetching replays:', error);
                 res.status(500).send({
                     success: false,
                     message: 'Failed to load replays',
-                    error: error.message,
+                    error: error.message
                 });
             }
         });
+
 
         // post
         app.post('/commentsReplay', async (req, res) => {
