@@ -755,6 +755,30 @@ async function run() {
         });
 
         // announcementCollection
+        // get api(all post)
+        app.get('/announcements', async (req, res) => {
+            try {
+                const result = await announcementCollection
+                    .find()
+                    .sort({ createdAt: -1 }) 
+                    .toArray();
+
+                res.send({
+                    success: true,
+                    count: result.length,
+                    announcements: result,
+                });
+
+            } catch (error) {
+                console.error('Error fetching announcements:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to fetch announcements',
+                    error: error.message,
+                });
+            }
+        });
+
         // post api
         app.post('/announcements', async (req, res) => {
             try {
