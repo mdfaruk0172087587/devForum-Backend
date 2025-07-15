@@ -308,17 +308,21 @@ async function run() {
         // get all post
         app.get('/devForum', async (req, res) => {
             try {
-                // Query parameters
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 5;
                 const skip = (page - 1) * limit;
 
-                // Total posts count (for frontend pagination)
-                const totalPosts = await postCollection.countDocuments();
+                const tag = req.query.tag;
 
-                // Paginated posts
+                // Filter condition based on tag
+                const query = tag ? { tag: { $regex: new RegExp(tag, 'i') } } : {};
+
+                // Count filtered posts
+                const totalPosts = await postCollection.countDocuments(query);
+
+                // Get paginated + filtered posts
                 const result = await postCollection
-                    .find()
+                    .find(query)
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(limit)
@@ -341,6 +345,7 @@ async function run() {
                 });
             }
         });
+
         // Get posts sorted by popularity
         app.get('/devForum/popular', async (req, res) => {
             try {
