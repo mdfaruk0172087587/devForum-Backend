@@ -916,7 +916,6 @@ async function run() {
                 });
             }
         });
-
         // post api
         app.post('/announcements', async (req, res) => {
             try {
@@ -949,10 +948,6 @@ async function run() {
                 });
             }
         });
-
-
-
-
         // payment collection
         // payments post 
         app.post('/payments', async (req, res) => {
@@ -990,8 +985,7 @@ async function run() {
                 res.status(500).send({ message: 'failed to record payment' })
             }
         })
-
-        // payment api 
+        // payment  api 
         app.post('/create-payment-intent', async (req, res) => {
             const amountInCents = req.body.amountInCents;
             try {
@@ -1006,6 +1000,12 @@ async function run() {
                 res.status(500).json({ error: error.message });
             }
         });
+        // tagsCollection
+        app.post('/tags', async(req, res) => {
+            const newTags = req.body;
+            const result = await tagsCollection.insertOne(newTags);
+            res.send(result);
+        })
 
 
 
