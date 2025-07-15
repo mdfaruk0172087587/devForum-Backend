@@ -45,6 +45,28 @@ async function run() {
         const tagsCollection = database.collection('tags');
 
         // user collection
+        // get all users
+        app.get('/users', async (req, res) => {
+            try {
+                const users = await userCollection
+                    .find() 
+                    .toArray();
+
+                res.send({
+                    success: true,
+                    count: users.length,
+                    users: users,
+                });
+            } catch (error) {
+                console.error('Error fetching users:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to fetch users',
+                    error: error.message,
+                });
+            }
+        });
+
         // get api (user email for role (admin dash))
         app.get('/users/role', async (req, res) => {
             try {
@@ -281,10 +303,6 @@ async function run() {
                 });
             }
         });
-
-
-
-
 
         // post collection
         // get all post
@@ -605,6 +623,28 @@ async function run() {
 
 
         // comment collection
+        // get all comments
+        app.get('/comments', async (req, res) => {
+            try {
+                const result = await commentCollection
+                    .find()
+                    .sort({ createdAt: -1 })
+                    .toArray();
+
+                res.send({
+                    success: true,
+                    count: result.length,
+                    comments: result,
+                });
+            } catch (error) {
+                console.error('Error fetching comments:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to fetch comments',
+                    error: error.message,
+                });
+            }
+        });
         // get for post id
         app.get('/comments/:postId', async (req, res) => {
             try {
