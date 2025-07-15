@@ -707,8 +707,68 @@ async function run() {
                 });
             }
         });
+        // delete comment(id)
+        app.delete('/comments/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                if (!id) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Comment ID is required',
+                    });
+                }
+
+                const query = { _id: new ObjectId(id) };
+                const result = await commentCollection.deleteOne(query);
+
+                if (result.deletedCount === 0) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'Comment not found or already deleted',
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    message: 'Comment deleted successfully',
+                    deletedCount: result.deletedCount,
+                });
+            } catch (error) {
+                console.error('Error deleting comment:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal Server Error',
+                    error: error.message,
+                });
+            }
+        });
+
 
         // comments replay collection
+        // get all replay
+        app.get('/commentsReplay', async (req, res) => {
+            try {
+                const result = await commentReplayCollection
+                    .find()
+                    .toArray();
+
+                res.send({
+                    success: true,
+                    count: result.length,
+                    replays: result,
+                });
+
+            } catch (error) {
+                console.error('Error fetching comment replays:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to load replays',
+                    error: error.message,
+                });
+            }
+        });
+
         // post
         app.post('/commentsReplay', async (req, res) => {
             try {
@@ -753,6 +813,44 @@ async function run() {
                 });
             }
         });
+        // delete id
+        app.delete('/commentsReplay/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                if (!id) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Replay ID is required',
+                    });
+                }
+
+                const query = { _id: new ObjectId(id) };
+                const result = await commentReplayCollection.deleteOne(query);
+
+                if (result.deletedCount === 0) {
+                    return res.status(404).send({
+                        success: false,
+                        message: 'Replay not found or already deleted',
+                    });
+                }
+
+                res.send({
+                    success: true,
+                    message: 'Replay deleted successfully',
+                    deletedCount: result.deletedCount,
+                });
+
+            } catch (error) {
+                console.error('Error deleting replay:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal server error',
+                    error: error.message,
+                });
+            }
+        });
+
 
         // announcementCollection
         // get api(all post)
@@ -760,7 +858,7 @@ async function run() {
             try {
                 const result = await announcementCollection
                     .find()
-                    .sort({ createdAt: -1 }) 
+                    .sort({ createdAt: -1 })
                     .toArray();
 
                 res.send({
