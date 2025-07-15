@@ -49,7 +49,7 @@ async function run() {
         app.get('/users', async (req, res) => {
             try {
                 const users = await userCollection
-                    .find() 
+                    .find()
                     .toArray();
 
                 res.send({
@@ -1001,7 +1001,30 @@ async function run() {
             }
         });
         // tagsCollection
-        app.post('/tags', async(req, res) => {
+        // get api 
+        app.get('/tags', async (req, res) => {
+            try {
+                const tags = await tagsCollection
+                    .find()
+                    .toArray();
+
+                res.send({
+                    success: true,
+                    count: tags.length,
+                    tags: tags,
+                });
+            } catch (error) {
+                console.error('Error fetching tags:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Failed to fetch tags',
+                    error: error.message,
+                });
+            }
+        });
+
+        // post api
+        app.post('/tags', async (req, res) => {
             const newTags = req.body;
             const result = await tagsCollection.insertOne(newTags);
             res.send(result);
