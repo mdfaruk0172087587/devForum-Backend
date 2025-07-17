@@ -1,6 +1,7 @@
 const express = require('express');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
+const jwt = require('jsonwebtoken')
 require('dotenv').config()
 const cookieParser = require('cookie-parser');
 const app = express();
@@ -10,10 +11,16 @@ const stripe = require('stripe')(process.env.PAYMENT_KEY); // Use your Stripe se
 
 
 // middleware
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:5173'],
+    credentials: true
+}));
 app.use(express.json());
 app.use(cookieParser())
 console.log()
+
+
+
 
 
 // mongodb
@@ -44,9 +51,58 @@ async function run() {
         const announcementCollection = database.collection('announcements');
         const tagsCollection = database.collection('tags');
 
+        // custom middleware
+        const verifyToken = (req, res, next) => {
+            const token = req?.cookies?.token;
+            if (!token) {
+                return res.status(401).send({ message: 'unauthorized access' })
+            }
+            //    verify token
+            jwt.verify(token, process.env.JWT_ACCESS_SECRET, (err, decoded) => {
+                if (err) {
+                    return res.status(401).send({ message: 'unauthorized access' })
+                }
+                req.decoded = decoded;
+                next();
+            })
+
+        };
+
+        const verifyTokenEmail = (req, res, next) => {
+            console.log(req.params.email, req.decoded.email)
+            if (req.params.email !== req.decoded.email) {
+                return res.status(403).send({ message: 'forbidden access' })
+            }
+            next()
+        };
+
+        const verifyAdmin = async(req, res , next) => {
+            const email = req.decoded.email;
+            console.log()
+            const query = {email};
+            const user = await userCollection.findOne(query);
+            if(!user || user.role !=='admin'){
+                return res.status(403).send({message: 'forbidden access'})
+            }
+            next()
+        }
+
+        // jwt apis
+        app.post('/jwt', async (req, res) => {
+            const { email } = req.body;
+            const user = { email };
+            const token = jwt.sign(user, process.env.JWT_ACCESS_SECRET, { expiresIn: '1days' });
+            // set token
+            res.cookie('token', token, {
+                httpOnly: true,
+                secure: false
+            })
+            res.send({ success: true })
+        });
+
         // user collection
         // get all users
-        app.get('/users', async (req, res) => {
+        app.get('/users',verifyToken,verifyAdmin, async (req, res) => {
             try {
                 const users = await userCollection
                     .find()
@@ -110,7 +166,7 @@ async function run() {
             }
         });
         // get api (user name (manage users))
-        app.get('/users/search', async (req, res) => {
+        app.get('/users/manage/:email/search', verifyToken,verifyTokenEmail, verifyAdmin, async (req, res) => {
             const name = req.query.name || '';
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
@@ -167,7 +223,7 @@ async function run() {
             res.send(result)
         });
         // update admin
-        app.put('/users/admin/:id', async (req, res) => {
+        app.put('/users/admin/:id', verifyToken,verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -223,7 +279,7 @@ async function run() {
             }
         });
         // update remove admin
-        app.put('/users/removeAdmin/:id', async (req, res) => {
+        app.put('/users/removeAdmin/:id',verifyToken,verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -371,7 +427,7 @@ async function run() {
             }
         });
         // get all post api for email( my post)
-        app.get('/devForum/myPosts/:email', async (req, res) => {
+        app.get('/devForum/myPosts/:email', verifyToken, verifyTokenEmail, async (req, res) => {
             const email = req.params.email;
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
@@ -396,7 +452,7 @@ async function run() {
 
 
         // get api for email (limit 3) (my profile)
-        app.get('/devForum/myProfile/:email', async (req, res) => {
+        app.get('/devForum/myProfile/:email', verifyToken, verifyTokenEmail, async (req, res) => {
             try {
                 const email = req.params.email;
 
@@ -417,9 +473,10 @@ async function run() {
             }
         });
         //  Count API: Get post count by user email (add post)
-        app.get('/devForum/count', async (req, res) => {
+        app.get('/devForum/:email/count', verifyToken, verifyTokenEmail, async (req, res) => {
             try {
                 const email = req.query.email;
+
                 if (!email) {
                     return res.status(400).send({ message: 'Email is required' });
                 }
@@ -472,7 +529,7 @@ async function run() {
             }
         });
         // post API
-        app.post('/devForum', async (req, res) => {
+        app.post('/devForum',verifyToken, async (req, res) => {
             try {
                 const newPost = req.body;
 
@@ -577,7 +634,7 @@ async function run() {
             }
         });
         // delete all post api for id
-        app.delete('/devForum/:id', async (req, res) => {
+        app.delete('/devForum/:email/:id',verifyToken, verifyTokenEmail, async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -617,7 +674,7 @@ async function run() {
 
         // comment collection
         // get all comments
-        app.get('/comments', async (req, res) => {
+        app.get('/comments',verifyToken,verifyAdmin, async (req, res) => {
             try {
                 const result = await commentCollection
                     .find()
@@ -677,7 +734,7 @@ async function run() {
         });
 
         // post
-        app.post('/comments', async (req, res) => {
+        app.post('/comments',verifyToken, async (req, res) => {
             try {
                 const newComment = req.body;
 
@@ -708,51 +765,8 @@ async function run() {
                 });
             }
         });
-        // update get for id(my post comment Feedback)
-        app.put('/comments/:id', async (req, res) => {
-            try {
-                const id = req.params.id;
-
-                // Validate ID
-                if (!ObjectId.isValid(id)) {
-                    return res.status(400).send({
-                        success: false,
-                        message: 'Invalid comment ID',
-                    });
-                }
-
-                const query = { _id: new ObjectId(id) };
-                const updateDoc = {
-                    $set: {
-                        status: true,
-                    }
-                };
-
-                const result = await commentCollection.updateOne(query, updateDoc);
-
-                if (result.modifiedCount === 0) {
-                    return res.status(404).send({
-                        success: false,
-                        message: 'Comment not found or already updated',
-                    });
-                }
-
-                res.send({
-                    success: true,
-                    message: 'Comment updated successfully',
-                    updatedId: id,
-                });
-            } catch (error) {
-                console.error('Error updating comment:', error);
-                res.status(500).send({
-                    success: false,
-                    message: 'Failed to update comment',
-                    error: error.message,
-                });
-            }
-        });
         // delete comment(id)
-        app.delete('/comments/:id', async (req, res) => {
+        app.delete('/comments/:id',verifyToken,verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -796,7 +810,7 @@ async function run() {
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 10;
                 const skip = (page - 1) * limit;
-                 const query = {};
+                const query = {};
                 const total = await commentReplayCollection.countDocuments(query);
 
                 const replays = await commentReplayCollection
@@ -824,7 +838,7 @@ async function run() {
 
 
         // post
-        app.post('/commentsReplay', async (req, res) => {
+        app.post('/commentsReplay',verifyToken, async (req, res) => {
             try {
                 const newReplay = req.body;
 
@@ -868,7 +882,7 @@ async function run() {
             }
         });
         // delete id
-        app.delete('/commentsReplay/:id', async (req, res) => {
+        app.delete('/commentsReplay/:id',verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -931,7 +945,7 @@ async function run() {
             }
         });
         // post api
-        app.post('/announcements', async (req, res) => {
+        app.post('/announcements',verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const newAnnouncement = req.body;
 
@@ -1038,7 +1052,7 @@ async function run() {
         });
 
         // post api
-        app.post('/tags', async (req, res) => {
+        app.post('/tags',verifyToken, verifyAdmin, async (req, res) => {
             const newTags = req.body;
             const result = await tagsCollection.insertOne(newTags);
             res.send(result);
