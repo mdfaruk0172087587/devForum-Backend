@@ -6,22 +6,16 @@ require('dotenv').config()
 const cookieParser = require('cookie-parser');
 const app = express();
 const port = process.env.PROT || 3000
-
-const stripe = require('stripe')(process.env.PAYMENT_KEY); // Use your Stripe secret key
-
+const stripe = require('stripe')(process.env.PAYMENT_KEY);
 
 // middleware
 app.use(cors({
-    origin: ['http://localhost:5173', 'https://magnificent-kulfi-510251.netlify.app'],
+    origin: ['http://localhost:5174', 'https://magnificent-kulfi-510251.netlify.app'],
     credentials: true
 }));
 app.use(express.json());
 app.use(cookieParser())
 console.log()
-
-
-
-
 
 // mongodb
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.hpujglf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -39,7 +33,6 @@ async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
         // await client.connect();
-
 
         const database = client.db('DevForumDB');
         // collection
@@ -65,7 +58,6 @@ async function run() {
                 req.decoded = decoded;
                 next();
             })
-
         };
 
         const verifyTokenEmail = (req, res, next) => {
@@ -100,16 +92,16 @@ async function run() {
             })
             res.send({ success: true })
         });
+
         // jwt logout
         app.post('/logout', async (req, res) => {
             console.log(req.headers.cookie)
             res.clearCookie('token', {
                 httpOnly: true,
-               secure: process.env.NODE_ENV === 'production',
+                secure: process.env.NODE_ENV === 'production',
                 sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
             }).send({ status: true, message: 'Logged out successfully' });
         });
-
 
         // user collection
         // get all users
@@ -118,7 +110,6 @@ async function run() {
                 const users = await userCollection
                     .find()
                     .toArray();
-
                 res.send({
                     success: true,
                     count: users.length,
@@ -133,40 +124,33 @@ async function run() {
                 });
             }
         });
-
         // get api (user email for role (admin dash))
         app.get('/users/role', verifyToken, async (req, res) => {
             try {
                 const email = req.query.email;
-
                 if (!email) {
                     return res.status(400).send({
                         success: false,
                         message: 'Email is required',
                     });
                 }
-
-                // userCollection থেকে role খোঁজা
                 const user = await userCollection.findOne(
                     { email },
                     {
                         projection: { role: 1, _id: 0 }
                     }
                 );
-
                 if (!user) {
                     return res.status(404).send({
                         success: false,
                         message: 'User not found',
                     });
                 }
-
                 res.send({
                     success: true,
                     email,
                     role: user.role,
                 });
-
             } catch (error) {
                 console.error('Error fetching user role:', error);
                 res.status(500).send({
@@ -182,11 +166,9 @@ async function run() {
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const skip = (page - 1) * limit;
-
             const query = { name: { $regex: name, $options: 'i' } };
             const users = await userCollection.find(query).skip(skip).limit(limit).toArray();
             const totalUsers = await userCollection.countDocuments(query);
-
             res.send({
                 success: true,
                 users,
@@ -194,21 +176,17 @@ async function run() {
                 currentPage: page
             });
         });
-
         // get api (user email)
         app.get('/users/:email', async (req, res) => {
             try {
                 const email = req.params.email;
-
                 const user = await userCollection.findOne({ email });
-
                 if (!user) {
                     return res.status(404).send({
                         success: false,
                         message: 'User not found',
                     });
                 }
-
                 res.send({
                     success: true,
                     user,
@@ -237,49 +215,40 @@ async function run() {
         app.put('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
-
                 if (!id) {
                     return res.status(400).send({
                         success: false,
                         message: 'User ID is required',
                     });
                 }
-
                 const query = { _id: new ObjectId(id) };
-
                 //  Step 1: user kho ja
                 const user = await userCollection.findOne(query);
-
                 if (!user) {
                     return res.status(404).send({
                         success: false,
                         message: 'User not found',
                     });
                 }
-
                 if (user.role === 'admin') {
                     return res.status(400).send({
                         success: false,
                         message: 'User is already an admin',
                     });
                 }
-
-                // 🛠️ Step 2: age r role save ko re admin ko ra
+                // Step 2: age r role save ko re admin ko ra
                 const updateDoc = {
                     $set: {
                         role: 'admin',
                         previousRole: user.role || 'user'
                     }
                 };
-
                 const result = await userCollection.updateOne(query, updateDoc);
-
                 res.send({
                     success: true,
                     message: `User promoted to admin (previous role was ${user.role})`,
                     modifiedCount: result.modifiedCount,
                 });
-
             } catch (error) {
                 console.error('Error updating user to admin:', error);
                 res.status(500).send({
@@ -293,35 +262,28 @@ async function run() {
         app.put('/users/removeAdmin/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
-
                 if (!id) {
                     return res.status(400).send({
                         success: false,
                         message: 'User ID is required',
                     });
                 }
-
                 const query = { _id: new ObjectId(id) };
-
                 // age r user an a
                 const user = await userCollection.findOne(query);
-
                 if (!user) {
                     return res.status(404).send({
                         success: false,
                         message: 'User not found',
                     });
                 }
-
                 if (user.role !== 'admin') {
                     return res.status(400).send({
                         success: false,
                         message: 'User is not an admin',
                     });
                 }
-
                 const previousRole = user.previousRole || 'user';
-
                 const updateDoc = {
                     $set: {
                         role: previousRole
@@ -330,16 +292,13 @@ async function run() {
                         previousRole: ""
                     }
                 };
-
                 const result = await userCollection.updateOne(query, updateDoc);
-
                 if (result.modifiedCount === 0) {
                     return res.status(500).send({
                         success: false,
                         message: 'Failed to remove admin role',
                     });
                 }
-
                 res.send({
                     success: true,
                     message: `User demoted from admin to ${previousRole}`,
@@ -363,30 +322,28 @@ async function run() {
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 5;
                 const skip = (page - 1) * limit;
-
                 const tag = req.query.tag;
-
-                // Filter condition based on tag
                 const query = tag ? { tag: { $regex: new RegExp(tag, 'i') } } : {};
-
-                // Count filtered posts
                 const totalPosts = await postCollection.countDocuments(query);
-
-                // Get paginated + filtered posts
-                const result = await postCollection
+                const rawPosts = await postCollection
                     .find(query)
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(limit)
                     .toArray();
-
+                const posts = await Promise.all(
+                    rawPosts.map(async (post) => {
+                        const commentCount = await commentCollection.countDocuments({ postId: post._id.toString() });
+                        return { ...post, commentCount };
+                    })
+                );
                 res.send({
                     success: true,
                     currentPage: page,
                     totalPosts,
                     totalPages: Math.ceil(totalPosts / limit),
-                    count: result.length,
-                    posts: result
+                    count: posts.length,
+                    posts
                 });
             } catch (error) {
                 console.error('Error fetching paginated posts:', error);
@@ -397,17 +354,14 @@ async function run() {
                 });
             }
         });
-
         // Get posts sorted by popularity
         app.get('/devForum/popular', async (req, res) => {
             try {
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 5;
                 const skip = (page - 1) * limit;
-
                 const totalPosts = await postCollection.countDocuments();
-
-                const result = await postCollection.aggregate([
+                const rawPosts = await postCollection.aggregate([
                     {
                         $addFields: {
                             voteDifference: { $subtract: ["$upVote", "$downVote"] }
@@ -419,14 +373,19 @@ async function run() {
                     { $skip: skip },
                     { $limit: limit }
                 ]).toArray();
-
+                const posts = await Promise.all(
+                    rawPosts.map(async (post) => {
+                        const commentCount = await commentCollection.countDocuments({ postId: post._id.toString() });
+                        return { ...post, commentCount };
+                    })
+                );
                 res.send({
                     success: true,
                     currentPage: page,
                     totalPosts,
                     totalPages: Math.ceil(totalPosts / limit),
-                    count: result.length,
-                    posts: result
+                    count: posts.length,
+                    posts
                 });
             } catch (error) {
                 console.error('Error sorting posts by popularity:', error);
@@ -443,15 +402,12 @@ async function run() {
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
             const skip = (page - 1) * limit;
-
             const totalPosts = await postCollection.countDocuments({ authorEmail: email });
-
             const posts = await postCollection
                 .find({ authorEmail: email })
                 .skip(skip)
                 .limit(limit)
                 .toArray();
-
             res.send({
                 success: true,
                 posts,
@@ -460,15 +416,11 @@ async function run() {
                 currentPage: page
             });
         });
-
-
         // get api for email (limit 3) (my profile)
         app.get('/devForum/myProfile/:email', verifyToken, verifyTokenEmail, async (req, res) => {
             try {
                 const email = req.params.email;
-
                 const posts = await postCollection.find({ authorEmail: email }).sort({ createdAt: -1 }).limit(3).toArray();
-
                 res.send({
                     success: true,
                     count: posts.length,
@@ -487,16 +439,13 @@ async function run() {
         app.get('/devForum/:email/count', verifyToken, verifyTokenEmail, async (req, res) => {
             try {
                 const email = req.query.email;
-
                 if (!email) {
                     return res.status(400).send({ message: 'Email is required' });
                 }
-
                 const count = await postCollection.countDocuments({ authorEmail: email });
                 const user = await userCollection.findOne({ email });
                 const isMember = user?.role === 'member';
                 const canPost = isMember || count <= 5;
-
                 res.send({ count, role: user?.role });
             } catch (error) {
                 console.error('Error fetching post count:', error);
@@ -507,7 +456,6 @@ async function run() {
         app.get('/devForum/:id', async (req, res) => {
             try {
                 const id = req.params.id;
-
                 // Invalid ObjectId handle
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).send({
@@ -515,17 +463,14 @@ async function run() {
                         message: 'Invalid post ID',
                     });
                 }
-
                 const query = { _id: new ObjectId(id) };
                 const result = await postCollection.findOne(query);
-
                 if (!result) {
                     return res.status(404).send({
                         success: false,
                         message: 'Post not found',
                     });
                 }
-
                 res.send({
                     success: true,
                     post: result,
@@ -543,12 +488,10 @@ async function run() {
         app.post('/devForum', verifyToken, async (req, res) => {
             try {
                 const newPost = req.body;
-
                 // add default values if not provided
                 newPost.upVote = 0;
                 newPost.downVote = 0;
                 newPost.createdAt = new Date();
-
                 const result = await postCollection.insertOne(newPost);
                 res.status(201).send({
                     success: true,
@@ -568,7 +511,6 @@ async function run() {
         app.patch('/devForum/upvote/:id', async (req, res) => {
             try {
                 const id = req.params.id;
-
                 // validate id
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).send({
@@ -576,21 +518,17 @@ async function run() {
                         message: 'Invalid post ID',
                     });
                 }
-
                 const filter = { _id: new ObjectId(id) };
                 const updateDoc = {
                     $inc: { upVote: 1 },
                 };
-
                 const result = await postCollection.updateOne(filter, updateDoc);
-
                 if (result.modifiedCount === 0) {
                     return res.status(404).send({
                         success: false,
                         message: 'Post not found or already updated',
                     });
                 }
-
                 res.send({
                     success: true,
                     message: 'Upvote added successfully',
@@ -609,27 +547,22 @@ async function run() {
         app.patch('/devForum/downvote/:id', async (req, res) => {
             try {
                 const id = req.params.id;
-
-                // Validate MongoDB ObjectId
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).send({
                         success: false,
                         message: 'Invalid post ID',
                     });
                 }
-
                 const result = await postCollection.updateOne(
                     { _id: new ObjectId(id) },
                     { $inc: { downVote: 1 } }
                 );
-
                 if (result.modifiedCount === 0) {
                     return res.status(404).send({
                         success: false,
                         message: 'Post not found or already downvoted',
                     });
                 }
-
                 res.send({
                     success: true,
                     message: 'Downvote added successfully',
@@ -648,25 +581,20 @@ async function run() {
         app.delete('/devForum/:email/:id', verifyToken, verifyTokenEmail, async (req, res) => {
             try {
                 const id = req.params.id;
-
-
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).send({
                         success: false,
                         message: 'Invalid post ID',
                     });
                 }
-
                 const query = { _id: new ObjectId(id) };
                 const result = await postCollection.deleteOne(query);
-
                 if (result.deletedCount === 0) {
                     return res.status(404).send({
                         success: false,
                         message: 'No post found to delete',
                     });
                 }
-
                 res.send({
                     success: true,
                     message: 'Post deleted successfully',
@@ -691,7 +619,6 @@ async function run() {
                     .find()
                     .sort({ createdAt: -1 })
                     .toArray();
-
                 res.send({
                     success: true,
                     count: result.length,
@@ -710,22 +637,17 @@ async function run() {
         app.get('/comments/:postId', async (req, res) => {
             try {
                 const postId = req.params.postId;
-
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 10;
                 const skip = (page - 1) * limit;
-
                 const query = { postId: postId };
-
                 const comments = await commentCollection
                     .find(query)
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(limit)
                     .toArray();
-
                 const totalComments = await commentCollection.countDocuments(query);
-
                 res.send({
                     success: true,
                     currentPage: page,
@@ -743,25 +665,18 @@ async function run() {
                 });
             }
         });
-
         // post
         app.post('/comments', verifyToken, async (req, res) => {
             try {
                 const newComment = req.body;
-
-                // Optional validation
                 if (!newComment.postId || !newComment.commenterEmail || !newComment.commentText) {
                     return res.status(400).send({
                         success: false,
                         message: 'Missing required fields (postId, author, text)',
                     });
                 }
-
-
                 newComment.createdAt = new Date().toISOString();
-
                 const result = await commentCollection.insertOne(newComment);
-
                 res.status(201).send({
                     success: true,
                     message: 'Comment added successfully',
@@ -792,24 +707,20 @@ async function run() {
         app.delete('/comments/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
-
                 if (!id) {
                     return res.status(400).send({
                         success: false,
                         message: 'Comment ID is required',
                     });
                 }
-
                 const query = { _id: new ObjectId(id) };
                 const result = await commentCollection.deleteOne(query);
-
                 if (result.deletedCount === 0) {
                     return res.status(404).send({
                         success: false,
                         message: 'Comment not found or already deleted',
                     });
                 }
-
                 res.send({
                     success: true,
                     message: 'Comment deleted successfully',
@@ -835,14 +746,12 @@ async function run() {
                 const skip = (page - 1) * limit;
                 const query = {};
                 const total = await commentReplayCollection.countDocuments(query);
-
                 const replays = await commentReplayCollection
                     .find(query)
                     .skip(skip)
                     .limit(limit)
                     .sort({ createdAt: -1 })
                     .toArray();
-
                 res.send({
                     success: true,
                     replays,
@@ -858,43 +767,32 @@ async function run() {
                 });
             }
         });
-
-
         // post
         app.post('/commentsReplay', verifyToken, async (req, res) => {
             try {
                 const newReplay = req.body;
-
-                // Validation
                 if (!newReplay.commentId || !newReplay.reportedEmail || !newReplay.feedback) {
                     return res.status(400).send({
                         success: false,
                         message: 'Missing required fields (commentId, reportedEmail, feedback)',
                     });
                 }
-
-                // Check if already reported by same user
                 const alreadyReported = await commentReplayCollection.findOne({
                     commentId: newReplay.commentId,
                     reportedEmail: newReplay.reportedEmail,
                 });
-
                 if (alreadyReported) {
                     return res.status(409).send({
                         success: false,
                         message: 'You have already reported this comment.',
                     });
                 }
-
-                // Insert into DB
                 const result = await commentReplayCollection.insertOne(newReplay);
-
                 res.status(201).send({
                     success: true,
                     message: 'Reported successfully.',
                     insertedId: result.insertedId,
                 });
-
             } catch (error) {
                 console.error('Error inserting report:', error);
                 res.status(500).send({
@@ -908,30 +806,25 @@ async function run() {
         app.delete('/commentsReplay/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
-
                 if (!id) {
                     return res.status(400).send({
                         success: false,
                         message: 'Replay ID is required',
                     });
                 }
-
                 const query = { _id: new ObjectId(id) };
                 const result = await commentReplayCollection.deleteOne(query);
-
                 if (result.deletedCount === 0) {
                     return res.status(404).send({
                         success: false,
                         message: 'Replay not found or already deleted',
                     });
                 }
-
                 res.send({
                     success: true,
                     message: 'Replay deleted successfully',
                     deletedCount: result.deletedCount,
                 });
-
             } catch (error) {
                 console.error('Error deleting replay:', error);
                 res.status(500).send({
@@ -951,13 +844,11 @@ async function run() {
                     .find()
                     .sort({ createdAt: -1 })
                     .toArray();
-
                 res.send({
                     success: true,
                     count: result.length,
                     announcements: result,
                 });
-
             } catch (error) {
                 console.error('Error fetching announcements:', error);
                 res.status(500).send({
@@ -971,20 +862,14 @@ async function run() {
         app.post('/announcements', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const newAnnouncement = req.body;
-
-                //  Validation check
                 if (!newAnnouncement?.title || !newAnnouncement?.description) {
                     return res.status(400).send({
                         success: false,
                         message: 'Title and message are required',
                     });
                 }
-
-                //  Optional: createdAt
                 newAnnouncement.createdAt = new Date();
-
                 const result = await announcementCollection.insertOne(newAnnouncement);
-
                 res.status(201).send({
                     success: true,
                     message: 'Announcement posted successfully',
@@ -1004,9 +889,6 @@ async function run() {
         app.post('/payments', async (req, res) => {
             try {
                 const { email, amount, paymentMethod, transactionId } = req.body;
-
-
-                // update users status
                 const updateResult = await userCollection.updateOne(
                     { email: email },
                     {
@@ -1015,8 +897,6 @@ async function run() {
                         }
                     }
                 );
-
-                // 2. insert payment record
                 const paymentDoc = {
                     email,
                     amount,
@@ -1041,16 +921,16 @@ async function run() {
             const amountInCents = req.body.amountInCents;
             try {
                 const paymentIntent = await stripe.paymentIntents.create({
-                    amount: amountInCents, // Amount in cents
+                    amount: amountInCents, 
                     currency: 'usd',
                     payment_method_types: ['card'],
                 });
-
                 res.json({ clientSecret: paymentIntent.client_secret });
             } catch (error) {
                 res.status(500).json({ error: error.message });
             }
         });
+
         // tagsCollection
         // get api 
         app.get('/tags', async (req, res) => {
@@ -1058,7 +938,6 @@ async function run() {
                 const tags = await tagsCollection
                     .find()
                     .toArray();
-
                 res.send({
                     success: true,
                     count: tags.length,
@@ -1073,12 +952,10 @@ async function run() {
                 });
             }
         });
-
         // post api
         app.post('/tags', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const newTag = req.body;
-
                 // Check if 'tag' field exists
                 if (!newTag?.tag) {
                     return res.status(400).send({
@@ -1086,28 +963,23 @@ async function run() {
                         message: 'Tag field is required',
                     });
                 }
-
                 // Check if same tag already exists (case-insensitive)
                 const existingTag = await tagsCollection.findOne({
                     tag: { $regex: `^${newTag.tag}$`, $options: 'i' },
                 });
-
                 if (existingTag) {
                     return res.status(409).send({
                         success: false,
                         message: 'This tag already exists',
                     });
                 }
-
                 // Insert new tag
                 const result = await tagsCollection.insertOne(newTag);
-
                 res.send({
                     success: true,
                     message: 'Tag added successfully',
                     insertedId: result.insertedId,
                 });
-
             } catch (error) {
                 console.error('Error adding tag:', error);
                 res.status(500).send({
