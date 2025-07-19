@@ -12,7 +12,7 @@ const stripe = require('stripe')(process.env.PAYMENT_KEY); // Use your Stripe se
 
 // middleware
 app.use(cors({
-    origin: ['http://localhost:5173'],
+    origin: ['http://localhost:5173', 'https://magnificent-kulfi-510251.netlify.app'],
     credentials: true
 }));
 app.use(express.json());
@@ -38,7 +38,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
 
         const database = client.db('DevForumDB');
@@ -76,13 +76,13 @@ async function run() {
             next()
         };
 
-        const verifyAdmin = async(req, res , next) => {
+        const verifyAdmin = async (req, res, next) => {
             const email = req.decoded.email;
             console.log()
-            const query = {email};
+            const query = { email };
             const user = await userCollection.findOne(query);
-            if(!user || user.role !=='admin'){
-                return res.status(403).send({message: 'forbidden access'})
+            if (!user || user.role !== 'admin') {
+                return res.status(403).send({ message: 'forbidden access' })
             }
             next()
         }
@@ -102,7 +102,7 @@ async function run() {
 
         // user collection
         // get all users
-        app.get('/users',verifyToken,verifyAdmin, async (req, res) => {
+        app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const users = await userCollection
                     .find()
@@ -124,7 +124,7 @@ async function run() {
         });
 
         // get api (user email for role (admin dash))
-        app.get('/users/role', async (req, res) => {
+        app.get('/users/role', verifyToken, async (req, res) => {
             try {
                 const email = req.query.email;
 
@@ -166,7 +166,7 @@ async function run() {
             }
         });
         // get api (user name (manage users))
-        app.get('/users/manage/:email/search', verifyToken,verifyTokenEmail, verifyAdmin, async (req, res) => {
+        app.get('/users/manage/:email/search', verifyToken, verifyTokenEmail, verifyAdmin, async (req, res) => {
             const name = req.query.name || '';
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
@@ -223,7 +223,7 @@ async function run() {
             res.send(result)
         });
         // update admin
-        app.put('/users/admin/:id', verifyToken,verifyAdmin, async (req, res) => {
+        app.put('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -279,7 +279,7 @@ async function run() {
             }
         });
         // update remove admin
-        app.put('/users/removeAdmin/:id',verifyToken,verifyAdmin, async (req, res) => {
+        app.put('/users/removeAdmin/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -529,7 +529,7 @@ async function run() {
             }
         });
         // post API
-        app.post('/devForum',verifyToken, async (req, res) => {
+        app.post('/devForum', verifyToken, async (req, res) => {
             try {
                 const newPost = req.body;
 
@@ -634,7 +634,7 @@ async function run() {
             }
         });
         // delete all post api for id
-        app.delete('/devForum/:email/:id',verifyToken, verifyTokenEmail, async (req, res) => {
+        app.delete('/devForum/:email/:id', verifyToken, verifyTokenEmail, async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -674,7 +674,7 @@ async function run() {
 
         // comment collection
         // get all comments
-        app.get('/comments',verifyToken,verifyAdmin, async (req, res) => {
+        app.get('/comments', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const result = await commentCollection
                     .find()
@@ -734,7 +734,7 @@ async function run() {
         });
 
         // post
-        app.post('/comments',verifyToken, async (req, res) => {
+        app.post('/comments', verifyToken, async (req, res) => {
             try {
                 const newComment = req.body;
 
@@ -765,8 +765,20 @@ async function run() {
                 });
             }
         });
+        // update comment
+        app.put('/comments/:email/:id',verifyToken, verifyTokenEmail, async(req, res) => {
+            const id = req.params.id;
+            const query = {_id: new ObjectId(id)};
+            const updateDoc = {
+                $set:{
+                    status: true
+                }
+            }
+            const result = await commentCollection.updateOne(query,updateDoc);
+            res.send(result)
+        })
         // delete comment(id)
-        app.delete('/comments/:id',verifyToken,verifyAdmin, async (req, res) => {
+        app.delete('/comments/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -838,7 +850,7 @@ async function run() {
 
 
         // post
-        app.post('/commentsReplay',verifyToken, async (req, res) => {
+        app.post('/commentsReplay', verifyToken, async (req, res) => {
             try {
                 const newReplay = req.body;
 
@@ -882,7 +894,7 @@ async function run() {
             }
         });
         // delete id
-        app.delete('/commentsReplay/:id',verifyToken, verifyAdmin, async (req, res) => {
+        app.delete('/commentsReplay/:id', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -945,7 +957,7 @@ async function run() {
             }
         });
         // post api
-        app.post('/announcements',verifyToken, verifyAdmin, async (req, res) => {
+        app.post('/announcements', verifyToken, verifyAdmin, async (req, res) => {
             try {
                 const newAnnouncement = req.body;
 
@@ -1052,11 +1064,49 @@ async function run() {
         });
 
         // post api
-        app.post('/tags',verifyToken, verifyAdmin, async (req, res) => {
-            const newTags = req.body;
-            const result = await tagsCollection.insertOne(newTags);
-            res.send(result);
-        })
+        app.post('/tags', verifyToken, verifyAdmin, async (req, res) => {
+            try {
+                const newTag = req.body;
+
+                // Check if 'tag' field exists
+                if (!newTag?.tag) {
+                    return res.status(400).send({
+                        success: false,
+                        message: 'Tag field is required',
+                    });
+                }
+
+                // Check if same tag already exists (case-insensitive)
+                const existingTag = await tagsCollection.findOne({
+                    tag: { $regex: `^${newTag.tag}$`, $options: 'i' },
+                });
+
+                if (existingTag) {
+                    return res.status(409).send({
+                        success: false,
+                        message: 'This tag already exists',
+                    });
+                }
+
+                // Insert new tag
+                const result = await tagsCollection.insertOne(newTag);
+
+                res.send({
+                    success: true,
+                    message: 'Tag added successfully',
+                    insertedId: result.insertedId,
+                });
+
+            } catch (error) {
+                console.error('Error adding tag:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Internal Server Error',
+                    error: error.message,
+                });
+            }
+        });
+
 
 
 
@@ -1064,8 +1114,8 @@ async function run() {
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
