@@ -95,10 +95,21 @@ async function run() {
             // set token
             res.cookie('token', token, {
                 httpOnly: true,
-                secure: false
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
             })
             res.send({ success: true })
         });
+        // jwt logout
+        app.post('/logout', async (req, res) => {
+            console.log(req.headers.cookie)
+            res.clearCookie('token', {
+                httpOnly: true,
+               secure: process.env.NODE_ENV === 'production',
+                sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+            }).send({ status: true, message: 'Logged out successfully' });
+        });
+
 
         // user collection
         // get all users
@@ -766,15 +777,15 @@ async function run() {
             }
         });
         // update comment
-        app.put('/comments/:email/:id',verifyToken, verifyTokenEmail, async(req, res) => {
+        app.put('/comments/:email/:id', verifyToken, verifyTokenEmail, async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const updateDoc = {
-                $set:{
+                $set: {
                     status: true
                 }
             }
-            const result = await commentCollection.updateOne(query,updateDoc);
+            const result = await commentCollection.updateOne(query, updateDoc);
             res.send(result)
         })
         // delete comment(id)
