@@ -10,7 +10,7 @@ const stripe = require('stripe')(process.env.PAYMENT_KEY);
 
 // middleware
 app.use(cors({
-    origin: ['http://localhost:5174', 'https://magnificent-kulfi-510251.netlify.app'],
+    origin: ['http://localhost:5173', 'https://magnificent-kulfi-510251.netlify.app'],
     credentials: true
 }));
 app.use(express.json());
