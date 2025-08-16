@@ -320,7 +320,7 @@ async function run() {
         app.get('/devForum', async (req, res) => {
             try {
                 const page = parseInt(req.query.page) || 1;
-                const limit = parseInt(req.query.limit) || 5;
+                const limit = parseInt(req.query.limit) || 8;
                 const skip = (page - 1) * limit;
                 const tag = req.query.tag;
                 const query = tag ? { tag: { $regex: new RegExp(tag, 'i') } } : {};
@@ -358,7 +358,7 @@ async function run() {
         app.get('/devForum/popular', async (req, res) => {
             try {
                 const page = parseInt(req.query.page) || 1;
-                const limit = parseInt(req.query.limit) || 5;
+                const limit = parseInt(req.query.limit) || 8;
                 const skip = (page - 1) * limit;
                 const totalPosts = await postCollection.countDocuments();
                 const rawPosts = await postCollection.aggregate([
@@ -484,6 +484,51 @@ async function run() {
                 });
             }
         });
+        // upVote
+        app.get('/devForum/home/featured', async (req, res) => {
+            try {
+                // postCollection থেকে upVote অনুযায়ী descending order এ 8টা post
+                const featuredPosts = await postCollection
+                    .find({})
+                    .sort({ upVote: -1 })  // upVote descending
+                    .limit(8)              // max 8 post
+                    .toArray();
+
+                res.status(200).json({
+                    success: true,
+                    data: featuredPosts
+                });
+            } catch (error) {
+                console.error(error);
+                res.status(500).json({
+                    success: false,
+                    message: 'Failed to fetch featured posts'
+                });
+            }
+        });
+        // last post
+        app.get('/devForum/home/last', async (req, res) => {
+            try {
+                const lastPosts = await postCollection
+                    .find({})
+                    .sort({ createdAt: -1 }) 
+                    .limit(8)
+                    .toArray();
+
+                res.status(200).json({
+                    success: true,
+                    data: lastPosts
+                });
+            } catch (error) {
+                console.error('Error fetching last posts:', error);
+                res.status(500).json({
+                    success: false,
+                    message: 'Failed to fetch last posts',
+                    error: error.message
+                });
+            }
+        });
+
         // post API
         app.post('/devForum', verifyToken, async (req, res) => {
             try {
@@ -921,7 +966,7 @@ async function run() {
             const amountInCents = req.body.amountInCents;
             try {
                 const paymentIntent = await stripe.paymentIntents.create({
-                    amount: amountInCents, 
+                    amount: amountInCents,
                     currency: 'usd',
                     payment_method_types: ['card'],
                 });
