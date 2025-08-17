@@ -354,31 +354,41 @@ async function run() {
                 });
             }
         });
-        // Get posts sorted by popularity
+        // Get posts sorted by popularity or latest
         app.get('/devForum/popular', async (req, res) => {
             try {
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 8;
+                const sortType = req.query.sort || "popularity"; // popularity | latest
                 const skip = (page - 1) * limit;
+
                 const totalPosts = await postCollection.countDocuments();
-                const rawPosts = await postCollection.aggregate([
-                    {
+
+                let pipeline = [];
+
+                if (sortType === "popularity") {
+                    pipeline.push({
                         $addFields: {
                             voteDifference: { $subtract: ["$upVote", "$downVote"] }
                         }
-                    },
-                    {
-                        $sort: { voteDifference: -1, createdAt: -1 }
-                    },
-                    { $skip: skip },
-                    { $limit: limit }
-                ]).toArray();
+                    });
+                    pipeline.push({ $sort: { voteDifference: -1, createdAt: -1 } });
+                } else if (sortType === "latest") {
+                    pipeline.push({ $sort: { createdAt: -1 } });
+                }
+
+                pipeline.push({ $skip: skip });
+                pipeline.push({ $limit: limit });
+
+                const rawPosts = await postCollection.aggregate(pipeline).toArray();
+
                 const posts = await Promise.all(
                     rawPosts.map(async (post) => {
                         const commentCount = await commentCollection.countDocuments({ postId: post._id.toString() });
                         return { ...post, commentCount };
                     })
                 );
+
                 res.send({
                     success: true,
                     currentPage: page,
@@ -388,7 +398,7 @@ async function run() {
                     posts
                 });
             } catch (error) {
-                console.error('Error sorting posts by popularity:', error);
+                console.error('Error sorting posts:', error);
                 res.status(500).send({
                     success: false,
                     message: 'Failed to sort posts',
@@ -396,6 +406,7 @@ async function run() {
                 });
             }
         });
+
         // get all post api for email( my post)
         app.get('/devForum/myPosts/:email', verifyToken, verifyTokenEmail, async (req, res) => {
             const email = req.params.email;
@@ -511,7 +522,7 @@ async function run() {
             try {
                 const lastPosts = await postCollection
                     .find({})
-                    .sort({ createdAt: -1 }) 
+                    .sort({ createdAt: -1 })
                     .limit(8)
                     .toArray();
 
